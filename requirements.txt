@@ -3,3 +3,4 @@ uvicorn
 torch
 torchvision
 pillow
+matplotlib
