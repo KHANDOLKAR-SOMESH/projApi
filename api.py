@@ -1,19 +1,19 @@
 from fastapi import FastAPI, UploadFile, File
+from fastapi.responses import JSONResponse, StreamingResponse
 from PIL import Image
 import torch
 import io
+import numpy as np
+import matplotlib.pyplot as plt
 from torchvision import transforms
 from torch import nn
 from torchvision import models
 
 app = FastAPI()
 
-# =========================
-# Load Models
-# =========================
-device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
-# Define Generator
+# ============================
+# 1. Load Pretrained Models
+# ============================
 class Generator(nn.Module):
     def __init__(self, input_channels=3, output_channels=3):
         super(Generator, self).__init__()
@@ -39,7 +39,6 @@ class Generator(nn.Module):
     def forward(self, x):
         return self.main(x)
 
-# Define Discriminator
 class Discriminator(nn.Module):
     def __init__(self, pretrained=True):
         super(Discriminator, self).__init__()
@@ -51,33 +50,87 @@ class Discriminator(nn.Module):
         features = self.feature_extractor(x).view(x.size(0), -1)
         return torch.sigmoid(self.fc(features))
 
-# Load trained models
+# Load models
+device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 generator = Generator().to(device)
-discriminator = Discriminator(pretrained=False).to(device)
+discriminator = Discriminator(pretrained=True).to(device)
 
-generator.load_state_dict(torch.load("models/generator.pth", map_location=device))
-discriminator.load_state_dict(torch.load("models/discriminator.pth", map_location=device))
+# Load trained weights
+generator.load_state_dict(torch.load("generator.pth", map_location=device))
+discriminator.load_state_dict(torch.load("discriminator.pth", map_location=device))
 
 generator.eval()
 discriminator.eval()
 
-# =========================
-# Image Preprocessing
-# =========================
+# ============================
+# 2. Define Transform
+# ============================
 transform = transforms.Compose([
     transforms.Resize((128, 128)),
     transforms.ToTensor(),
     transforms.Normalize((0.5, 0.5, 0.5), (0.5, 0.5, 0.5))
 ])
 
+# ============================
+# 3. Helper Function to Visualize Artifacts
+# ============================
+def generate_artifact_image(input_image, generated_image):
+    """ Create an artifact image showing differences between input and generated images """
+    input_np = input_image.permute(1, 2, 0).cpu().numpy()
+    generated_np = generated_image.detach().permute(1, 2, 0).cpu().numpy()
+    artifact_np = np.abs(input_np - generated_np)
+
+    # Convert to PIL Image
+    fig, axes = plt.subplots(1, 3, figsize=(15, 5))
+    
+    axes[0].imshow((input_np * 0.5 + 0.5))  # De-normalize
+    axes[0].set_title("Input Image")
+    axes[0].axis("off")
+
+    axes[1].imshow((generated_np * 0.5 + 0.5))
+    axes[1].set_title("Generated Image")
+    axes[1].axis("off")
+
+    axes[2].imshow(artifact_np)
+    axes[2].set_title("Artifact (Difference)")
+    axes[2].axis("off")
+
+    # Save the image as bytes
+    img_byte_arr = io.BytesIO()
+    plt.savefig(img_byte_arr, format="PNG")
+    img_byte_arr.seek(0)
+    plt.close(fig)
+
+    return img_byte_arr
+
+# ============================
+# 4. API Endpoint
+# ============================
 @app.post("/predict/")
 async def predict(file: UploadFile = File(...)):
+    """
+    Upload an image, and the API will determine if it's real or fake.
+    The response includes the classification and an artifact visualization.
+    """
+    # Read image
     image = Image.open(io.BytesIO(await file.read())).convert("RGB")
-    image_tensor = transform(image).unsqueeze(0).to(device)
+    image_tensor = transform(image).unsqueeze(0).to(device)  # Add batch dimension
 
-    # Predict if the image is real or fake
+    # Discriminator prediction
     real_or_fake_prob = discriminator(image_tensor).item()
-    prediction = "REAL" if real_or_fake_prob > 0.5 else "FAKE"
+    classification = "REAL" if real_or_fake_prob > 0.5 else "FAKE"
 
-    return {"prediction": prediction, "confidence": round(real_or_fake_prob, 2)}
+    # Generate reconstructed image
+    generated_image = generator(image_tensor).squeeze(0)  # Remove batch dimension
+    artifact_img_bytes = generate_artifact_image(image_tensor.squeeze(0), generated_image)
 
+    # Return JSON with the image
+    return StreamingResponse(artifact_img_bytes, media_type="image/png",
+                             headers={"X-Classification": classification, "X-Confidence": str(real_or_fake_prob)})
+
+# ============================
+# 5. Root Endpoint (Optional)
+# ============================
+@app.get("/")
+def root():
+    return {"message": "Welcome to the Medical Deepfake Detection API!"}
