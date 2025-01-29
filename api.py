@@ -56,8 +56,8 @@ generator = Generator().to(device)
 discriminator = Discriminator(pretrained=True).to(device)
 
 # Load trained weights
-generator.load_state_dict(torch.load("generator.pth", map_location=device))
-discriminator.load_state_dict(torch.load("discriminator.pth", map_location=device))
+generator.load_state_dict(torch.load("modles/generator.pth", map_location=device))
+discriminator.load_state_dict(torch.load("modles/discriminator.pth", map_location=device))
 
 generator.eval()
 discriminator.eval()
