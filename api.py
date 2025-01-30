@@ -8,6 +8,23 @@ import matplotlib.pyplot as plt
 from torchvision import transforms
 from torch import nn
 from torchvision import models
+from fastapi.middleware.cors import CORSMiddleware
+
+
+# Define allowed origins (use "*" to allow all)
+origins = [
+    "http://localhost:3000",  # Allow frontend in development
+    "https://yourfrontend.com",  # Add your production frontend domain
+]
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,  # Allow only specific origins
+    allow_credentials=True,
+    allow_methods=["*"],  # Allow all methods (GET, POST, etc.)
+    allow_headers=["*"],  # Allow all headers
+)
 
 app = FastAPI()
 
