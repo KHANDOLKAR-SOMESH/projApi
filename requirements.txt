@@ -1,8 +1,5 @@
-fastapi
-uvicorn
+flask
 torch
 torchvision
 pillow
-matplotlib
 gunicorn
-python-multipart
