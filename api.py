@@ -4,7 +4,6 @@ import torchvision.transforms as transforms
 from torchvision import models
 from PIL import Image
 from flask import Flask, request, jsonify, send_file
-
 from flask_cors import CORS
 import io
 import os
@@ -32,20 +31,20 @@ class Discriminator(nn.Module):
         features = self.feature_extractor(x).view(x.size(0), -1)
         return torch.sigmoid(self.fc(features))
 
-# Load Generator
+# Load Generator (Modified to accept an image as input)
 class Generator(nn.Module):
     def __init__(self):
         super(Generator, self).__init__()
         self.model = nn.Sequential(
-            nn.ConvTranspose2d(100, 64, kernel_size=4, stride=1, padding=0),
+            nn.Conv2d(3, 64, kernel_size=4, stride=2, padding=1),
             nn.BatchNorm2d(64),
             nn.ReLU(True),
-            nn.ConvTranspose2d(64, 3, kernel_size=4, stride=2, padding=1),
+            nn.Conv2d(64, 3, kernel_size=4, stride=2, padding=1),
             nn.Tanh()
         )
 
-    def forward(self, z):
-        return self.model(z)
+    def forward(self, x):
+        return self.model(x)
 
 # Load trained models from the models folder
 discriminator = Discriminator().to(device)
@@ -79,10 +78,9 @@ def predict():
     
     result = "Fake" if output < 0.5 else "Real"
 
-    # Generate an image using the generator
-    z = torch.randn(1, 100, 1, 1).to(device)  # Random noise input
+    # Generate an image using the generator (taking input image instead of noise)
     with torch.no_grad():
-        generated_image_tensor = generator(z).squeeze(0).cpu()
+        generated_image_tensor = generator(processed_image).squeeze(0).cpu()
 
     # Convert tensors to images
     def tensor_to_pil(tensor):
