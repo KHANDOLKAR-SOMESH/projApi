@@ -10,7 +10,7 @@ from torch import nn
 from torchvision import models
 from fastapi.middleware.cors import CORSMiddleware
 
-
+app = FastAPI()
 # Define allowed origins (use "*" to allow all)
 origins = [
     "http://localhost:3000",  # Allow frontend in development
@@ -26,7 +26,7 @@ app.add_middleware(
     allow_headers=["*"],  # Allow all headers
 )
 
-app = FastAPI()
+
 
 # ============================
 # 1. Load Pretrained Models
